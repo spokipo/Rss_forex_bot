@@ -7,36 +7,23 @@ import threading
 
 # === Конфигурация ===
 RSS_URL = "https://ru.investing.com/rss/news_25.rss"
-CHECK_INTERVAL = 60  # Проверка каждую минуту
-LAST_LINK_FILE = "last_link.txt"
+CHECK_INTERVAL = 60  # секунд
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-THREAD_ID = os.getenv("MESSAGE_THREAD_ID")
+THREAD_ID = os.getenv("MESSAGE_THREAD_ID")  # Можно оставить пустым
 
 bot = Bot(token=BOT_TOKEN)
+last_link = None
 first_run = True
 
-# === Работа с файлом ссылки ===
-def load_last_link():
-    if os.path.exists(LAST_LINK_FILE):
-        with open(LAST_LINK_FILE, "r") as f:
-            return f.read().strip()
-    return None
-
-def save_last_link(link):
-    with open(LAST_LINK_FILE, "w") as f:
-        f.write(link)
-
-# === Очистка ссылки от мусора
+# === Очистка ссылок
 def normalize_link(link):
     return link.split('?')[0].rstrip('/')
 
-last_sent_link = normalize_link(load_last_link() or "")
-
-# === Отправка новостей ===
+# === Отправка новостей
 async def send_news(entries):
-    global last_sent_link, first_run
+    global last_link, first_run
 
     entries = list(reversed(entries))
 
@@ -49,7 +36,7 @@ async def send_news(entries):
 
         clean_link = normalize_link(link)
 
-        if clean_link == last_sent_link:
+        if clean_link == last_link:
             continue
 
         msg = f"📰 <b>{title}</b>\n{link}"
@@ -60,8 +47,7 @@ async def send_news(entries):
                 parse_mode="HTML",
                 message_thread_id=int(THREAD_ID) if THREAD_ID else None
             )
-            last_sent_link = clean_link
-            save_last_link(clean_link)
+            last_link = clean_link
             await asyncio.sleep(1)
         except Exception as e:
             print("❌ Ошибка отправки:", e)
@@ -71,7 +57,7 @@ async def send_news(entries):
 
     first_run = False
 
-# === Основной цикл ===
+# === Основной цикл
 async def main():
     try:
         await bot.send_message(
@@ -81,7 +67,7 @@ async def main():
             message_thread_id=int(THREAD_ID) if THREAD_ID else None
         )
     except Exception as e:
-        print("❌ Ошибка запуска бота:", e)
+        print("❌ Ошибка при запуске бота:", e)
 
     while True:
         try:
@@ -89,10 +75,10 @@ async def main():
             feed = feedparser.parse(RSS_URL)
             await send_news(feed.entries)
         except Exception as e:
-            print("❌ Ошибка чтения RSS:", e)
+            print("❌ Ошибка RSS:", e)
         await asyncio.sleep(CHECK_INTERVAL)
 
-# === HTTP-сервер для Render ===
+# === HTTP для Render
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -104,7 +90,7 @@ def run_http_server():
     print("🌐 HTTP-сервер запущен на порту 10000")
     server.serve_forever()
 
-# === Запуск ===
+# === Запуск
 if __name__ == "__main__":
     threading.Thread(target=run_http_server, daemon=True).start()
     asyncio.run(main())
