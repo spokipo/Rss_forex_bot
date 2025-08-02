@@ -7,15 +7,28 @@ import threading
 
 # === Конфигурация ===
 RSS_URL = "https://ru.investing.com/rss/news_25.rss"
-CHECK_INTERVAL = 60  # сек
+CHECK_INTERVAL = 60  # Проверка каждые 60 сек
+LAST_LINK_FILE = "last_link.txt"
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 THREAD_ID = os.getenv("MESSAGE_THREAD_ID")
 
 bot = Bot(token=BOT_TOKEN)
-last_sent_link = None
 first_run = True
+
+# === Работа с файлом ссылки ===
+def load_last_link():
+    if os.path.exists(LAST_LINK_FILE):
+        with open(LAST_LINK_FILE, "r") as f:
+            return f.read().strip()
+    return None
+
+def save_last_link(link):
+    with open(LAST_LINK_FILE, "w") as f:
+        f.write(link)
+
+last_sent_link = load_last_link()
 
 # === Отправка новостей ===
 async def send_news(entries):
@@ -39,6 +52,7 @@ async def send_news(entries):
                 message_thread_id=int(THREAD_ID) if THREAD_ID else None
             )
             last_sent_link = link
+            save_last_link(link)
             await asyncio.sleep(1)
         except Exception as e:
             print("❌ Ошибка отправки:", e)
