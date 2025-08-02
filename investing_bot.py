@@ -7,7 +7,7 @@ import threading
 
 # === Конфигурация ===
 RSS_URL = "https://ru.investing.com/rss/news_25.rss"
-CHECK_INTERVAL = 60  # Проверка каждые 60 сек
+CHECK_INTERVAL = 60  # Проверка каждую минуту
 LAST_LINK_FILE = "last_link.txt"
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -28,7 +28,11 @@ def save_last_link(link):
     with open(LAST_LINK_FILE, "w") as f:
         f.write(link)
 
-last_sent_link = load_last_link()
+# === Очистка ссылки от мусора
+def normalize_link(link):
+    return link.split('?')[0].rstrip('/')
+
+last_sent_link = normalize_link(load_last_link() or "")
 
 # === Отправка новостей ===
 async def send_news(entries):
@@ -40,7 +44,12 @@ async def send_news(entries):
         title = entry.get("title")
         link = entry.get("link")
 
-        if not link or link == last_sent_link:
+        if not link:
+            continue
+
+        clean_link = normalize_link(link)
+
+        if clean_link == last_sent_link:
             continue
 
         msg = f"📰 <b>{title}</b>\n{link}"
@@ -51,8 +60,8 @@ async def send_news(entries):
                 parse_mode="HTML",
                 message_thread_id=int(THREAD_ID) if THREAD_ID else None
             )
-            last_sent_link = link
-            save_last_link(link)
+            last_sent_link = clean_link
+            save_last_link(clean_link)
             await asyncio.sleep(1)
         except Exception as e:
             print("❌ Ошибка отправки:", e)
@@ -83,7 +92,7 @@ async def main():
             print("❌ Ошибка чтения RSS:", e)
         await asyncio.sleep(CHECK_INTERVAL)
 
-# === HTTP для Render ===
+# === HTTP-сервер для Render ===
 class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
